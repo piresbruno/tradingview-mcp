@@ -4,3 +4,10 @@ scripts/current.pine
 temp_*
 *.log
 discovery-log.json
+
+# Environment & secrets
+.env
+.env.*
+
+# Trading activity logs (contain real order IDs)
+safety-check-log.json

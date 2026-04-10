@@ -1,0 +1,67 @@
+#!/bin/sh
+# Pre-commit hook: secret scanning + unit tests
+# Setup: git config core.hooksPath .githooks
+
+set -e
+
+echo "🔒 Running pre-commit checks..."
+
+# ── Step 1: Secret Scanning ──────────────────────────────────
+echo ""
+echo "Scanning for secrets in staged files..."
+
+SECRETS_FOUND=0
+
+# Check for .env files being committed
+if git diff --cached --name-only | grep -qi '\.env'; then
+  echo "❌ BLOCKED: .env file is staged for commit!"
+  echo "   Run: git reset HEAD <file> to unstage"
+  SECRETS_FOUND=1
+fi
+
+# Check for safety-check-log.json (contains real order IDs)
+if git diff --cached --name-only | grep -q 'safety-check-log.json'; then
+  echo "❌ BLOCKED: safety-check-log.json is staged (contains real order data)"
+  echo "   Run: git reset HEAD safety-check-log.json"
+  SECRETS_FOUND=1
+fi
+
+# Scan staged diff for secret patterns
+STAGED_DIFF=$(git diff --cached 2>/dev/null || true)
+if [ -n "$STAGED_DIFF" ]; then
+  if echo "$STAGED_DIFF" | grep -qiE '(BITGET_API_KEY|BITGET_SECRET_KEY|BITGET_PASSPHRASE)\s*=\s*["\x27]?[A-Za-z0-9]'; then
+    echo "❌ BLOCKED: BitGet API credentials found in staged changes!"
+    SECRETS_FOUND=1
+  fi
+
+  if echo "$STAGED_DIFF" | grep -qiE '(api_key|secret_key|passphrase|private_key)\s*[:=]\s*["\x27][A-Za-z0-9+/]{20,}'; then
+    echo "❌ BLOCKED: Possible API secret found in staged changes!"
+    SECRETS_FOUND=1
+  fi
+
+  if echo "$STAGED_DIFF" | grep -q '^+-----BEGIN.*PRIVATE KEY-----'; then
+    echo "❌ BLOCKED: Private key found in staged changes!"
+    SECRETS_FOUND=1
+  fi
+fi
+
+if [ "$SECRETS_FOUND" -eq 1 ]; then
+  echo ""
+  echo "Commit blocked. Remove secrets before committing."
+  exit 1
+fi
+
+echo "✅ No secrets found"
+
+# ── Step 2: Unit Tests ───────────────────────────────────────
+echo ""
+echo "Running unit tests..."
+
+npm run test:unit --silent 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ Unit tests failed. Fix before committing."
+  exit 1
+fi
+
+echo ""
+echo "✅ All pre-commit checks passed"

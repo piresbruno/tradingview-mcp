@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Scan for secrets
+        run: |
+          echo "Scanning for secrets in source files..."
+          FOUND=0
+
+          if grep -rqiE '(BITGET_API_KEY|BITGET_SECRET_KEY|BITGET_PASSPHRASE)\s*=\s*["'"'"'][A-Za-z0-9]' --include='*.js' --include='*.json' --exclude-dir=node_modules .; then
+            echo "::error::Possible BitGet API credentials found in source files"
+            grep -rniE '(BITGET_API_KEY|BITGET_SECRET_KEY|BITGET_PASSPHRASE)\s*=\s*["'"'"'][A-Za-z0-9]' --include='*.js' --include='*.json' --exclude-dir=node_modules .
+            FOUND=1
+          fi
+
+          if grep -rq 'BEGIN.*PRIVATE KEY' --include='*.js' --include='*.json' --include='*.pem' --exclude-dir=node_modules .; then
+            echo "::error::Private key found in source files"
+            FOUND=1
+          fi
+
+          if [ -f .env ]; then
+            echo "::error::.env file found in repository"
+            FOUND=1
+          fi
+
+          if [ "$FOUND" -eq 1 ]; then
+            exit 1
+          fi
+
+          echo "No secrets found"

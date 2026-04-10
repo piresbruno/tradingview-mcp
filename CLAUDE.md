@@ -127,3 +127,66 @@ Claude Code ←→ MCP Server (stdio) ←→ CDP (localhost:9222) ←→ Trading
 ```
 
 Pine graphics path: `study._graphics._primitivesCollection.dwglines.get('lines').get(false)._primitivesDataById`
+
+## Development Workflow
+
+### Before Coding
+1. Understand what you're changing and which files are affected
+2. Read existing code before modifying — don't propose blind changes
+3. Check `git status` for a clean working tree
+
+### Testing
+- **Always run `npm run test:unit` before committing** — offline tests (~2 seconds)
+- Run `npm run test:e2e` only when TradingView Desktop is running on port 9222
+- E2E tests cover all 70+ MCP tools against a live instance
+
+### Security — MANDATORY
+- **Run `/security-check` before every commit** — this project handles real money via BitGet API
+- **Never commit `.env` files** — they contain `BITGET_API_KEY`, `BITGET_SECRET_KEY`, `BITGET_PASSPHRASE`
+- **Never commit `safety-check-log.json`** — contains real order IDs and trading activity
+- Never hardcode API keys, secrets, or credentials in source files
+- The pre-commit hook (`.githooks/pre-commit`) enforces secret scanning + unit tests automatically
+
+### Trading Safety
+- Never modify `scalper-run.js` or `rules.json` without understanding the financial implications
+- Changes to order execution logic, position sizing, or safety checks require extra caution
+- The `safety-check-log.json` audit trail tracks all order decisions — review it after changes
+
+### Committing
+- Format: `<verb> <what> — <context>`
+- Verbs: Add, Fix, Update, Remove, Refactor
+- Examples: "Add VWAP+RSI scalper — rules.json updated", "Fix asset locking — retry sell with lock-aware error parsing"
+
+### Skills and Agents
+- Located under `.claude/skills/` and `.claude/agents/`
+- Skills follow the SKILL.md frontmatter pattern (name, description)
+- Agents follow the agent.md frontmatter pattern (name, description, model, tools)
+
+## Skill / Agent Selection
+
+| Task | Use |
+|------|-----|
+| Build or modify a Pine indicator/strategy | `/pine-develop` |
+| Analyze a chart setup | `/chart-analysis` |
+| Generate strategy backtest report | `/strategy-report` |
+| Scan multiple symbols for setups | `/multi-symbol-scan` |
+| Practice trading in replay mode | `/replay-practice` |
+| Validate build before committing | `/validate-build` |
+| Check for secrets before committing | `/security-check` |
+| Deep performance analysis (agent) | `performance-analyst` |
+
+## Project Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Configure git hooks (one-time)
+git config core.hooksPath .githooks
+
+# Run the MCP server
+npm start
+
+# Run TradingView with CDP enabled
+node src/cli/index.js launch
+```
