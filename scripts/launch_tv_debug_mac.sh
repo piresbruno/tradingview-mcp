@@ -4,42 +4,36 @@
 
 PORT="${1:-9222}"
 
-# Auto-detect TradingView install location
-APP=""
+# Auto-detect TradingView .app bundle
+APP_BUNDLE=""
 LOCATIONS=(
-  "/Applications/TradingView.app/Contents/MacOS/TradingView"
-  "$HOME/Applications/TradingView.app/Contents/MacOS/TradingView"
+  "/Applications/TradingView.app"
+  "$HOME/Applications/TradingView.app"
 )
 
 for loc in "${LOCATIONS[@]}"; do
-  if [ -f "$loc" ]; then
-    APP="$loc"
+  if [ -d "$loc" ]; then
+    APP_BUNDLE="$loc"
     break
   fi
 done
 
 # Fallback: search with mdfind (Spotlight)
-if [ -z "$APP" ]; then
-  APP=$(mdfind "kMDItemCFBundleIdentifier == 'com.niceincontact.TradingView'" 2>/dev/null | head -1)
-  if [ -n "$APP" ]; then
-    APP="$APP/Contents/MacOS/TradingView"
-  fi
+if [ -z "$APP_BUNDLE" ]; then
+  APP_BUNDLE=$(mdfind "kMDItemCFBundleIdentifier == 'com.tradingview.tradingviewapp.desktop'" 2>/dev/null | head -1)
 fi
 
 # Fallback: find any TradingView.app
-if [ -z "$APP" ] || [ ! -f "$APP" ]; then
-  APP=$(find /Applications "$HOME/Applications" -name "TradingView.app" -maxdepth 2 2>/dev/null | head -1)
-  if [ -n "$APP" ]; then
-    APP="$APP/Contents/MacOS/TradingView"
-  fi
+if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
+  APP_BUNDLE=$(find /Applications "$HOME/Applications" -name "TradingView.app" -maxdepth 2 2>/dev/null | head -1)
 fi
 
-if [ -z "$APP" ] || [ ! -f "$APP" ]; then
+if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
   echo "Error: TradingView not found."
   echo "Checked: /Applications/TradingView.app, ~/Applications/TradingView.app"
   echo ""
   echo "If installed elsewhere, run manually:"
-  echo "  /path/to/TradingView.app/Contents/MacOS/TradingView --remote-debugging-port=$PORT"
+  echo "  open /path/to/TradingView.app --args --remote-debugging-port=$PORT"
   exit 1
 fi
 
@@ -47,15 +41,14 @@ fi
 pkill -f "TradingView" 2>/dev/null
 sleep 1
 
-echo "Found TradingView at: $APP"
+echo "Found TradingView at: $APP_BUNDLE"
 echo "Launching with --remote-debugging-port=$PORT ..."
-"$APP" --remote-debugging-port=$PORT &
-TV_PID=$!
-echo "PID: $TV_PID"
+open -a "$APP_BUNDLE" --args --remote-debugging-port=$PORT
+echo "Launched via macOS open command"
 
 # Wait for CDP to be ready
 echo "Waiting for CDP..."
-for i in $(seq 1 15); do
+for i in $(seq 1 30); do
   if curl -s "http://localhost:$PORT/json/version" > /dev/null 2>&1; then
     echo "CDP ready at http://localhost:$PORT"
     curl -s "http://localhost:$PORT/json/version" | python3 -m json.tool 2>/dev/null || curl -s "http://localhost:$PORT/json/version"
@@ -64,5 +57,5 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-echo "Warning: CDP not responding after 15s. TradingView may still be loading."
+echo "Warning: CDP not responding after 30s. TradingView may still be loading."
 echo "Check manually: curl http://localhost:$PORT/json/version"
